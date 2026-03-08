@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FPV Drone Simulator Pro</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Rajdhani:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg:       #04080d;
+  --panel:    #070f18;
+  --panel2:   #0a1622;
+  --border:   #0e2a40;
+  --border2:  #1a4060;
+  --cyan:     #00e5ff;
+  --cyan2:    #00b4cc;
+  --orange:   #ff6b00;
+  --green:    #00ff88;
+  --red:      #ff2255;
+  --yellow:   #ffd600;
+  --purple:   #aa00ff;
+  --text:     #7ab8d4;
+  --textdim:  #2a5060;
+  --mono:     'JetBrains Mono', monospace;
+  --display:  'Rajdhani', sans-serif;
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  height: 100vh;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: 40px 1fr;
+  grid-template-columns: 1fr 300px;
+}
+
+/* scanlines */
+body::after {
+  content:'';
+  position:fixed;
+  inset:0;
+  background: repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,229,255,.012) 3px,rgba(0,229,255,.012) 4px);
+  pointer-events:none;
+  z-index:9000;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  grid-column: 1/-1;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 20px;
+}
+
+.logo {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 4px;
+  color: var(--cyan);
+  text-shadow: 0 0 16px var(--cyan);
+  white-space: nowrap;
+}
+.logo b { color: var(--orange); }
+
+.top-status { display:flex; gap:16px; font-size:10px; flex:1; padding-left:20px; }
+.ts { display:flex; align-items:center; gap:5px; }
+.dot { width:7px;height:7px;border-radius:50%; }
+.dot-g { background:var(--green);box-shadow:0 0 6px var(--green); animation:blink 1.4s infinite; }
+.dot-r { background:var(--red);box-shadow:0 0 6px var(--red); }
+.dot-y { background:var(--yellow);box-shadow:0 0 6px var(--yellow); animation:blink 2s infinite; }
+.dot-off { background:var(--textdim); }
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+.top-right { display:flex; gap:8px; margin-left:auto; }
+
+.tbtn {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 4px 14px;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 1px solid;
+  letter-spacing: 1px;
+  transition: all .2s;
+  text-transform: uppercase;
+}
+.tbtn-arm { color:var(--orange);border-color:var(--orange);background:rgba(255,107,0,.07); }
+.tbtn-arm:hover { background:rgba(255,107,0,.2); box-shadow:0 0 10px rgba(255,107,0,.4); }
+.tbtn-arm.armed { color:var(--red);border-color:var(--red);background:rgba(255,34,85,.12); animation:blink .8s infinite; }
+.tbtn-reset { color:var(--textdim);border-color:var(--textdim);background:transparent; }
+.tbtn-reset:hover { color:var(--text);border-color:var(--text); }
+
+/* ── LEFT PANEL: viewport + terminal stacked ── */
+.left-panel {
+  display: grid;
+  grid-template-rows: 1fr 280px;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+}
+
+/* ── VIEWPORT ── */
+.viewport {
+  position: relative;
+  background: radial-gradient(ellipse at 50% 40%, #071828 0%, #020810 100%);
+  overflow: hidden;
+}
+
+.vp-grid {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 52%;
+  background:
+    repeating-linear-gradient(90deg,transparent,transparent 59px,rgba(0,229,255,.06) 60px),
+    repeating-linear-gradient(0deg,transparent,transparent 59px,rgba(0,229,255,.06) 60px);
+  transform: perspective(350px) rotateX(58deg);
+  transform-origin: bottom;
+}
+
+/* HUD corners */
+.hud { position:absolute; font-size:10px; color:rgba(0,229,255,.55); font-family:var(--mono); line-height:1.7; }
+.hud-tl{top:10px;left:12px}
+.hud-tr{top:10px;right:12px;text-align:right}
+.hud-bl{bottom:10px;left:12px}
+.hud-br{bottom:10px;right:12px;text-align:right}
+.hud span{color:var(--cyan)}
+
+/* Altitude bar */
+.alt-bar{position:absolute;right:14px;top:15%;bottom:15%;width:10px;background:rgba(0,40,60,.6);border:1px solid var(--border);border-radius:5px;overflow:hidden}
+.alt-fill{position:absolute;bottom:0;width:100%;border-radius:5px;transition:height .3s;background:linear-gradient(to top,var(--cyan),var(--green));box-shadow:0 0 8px var(--cyan)}
+
+/* Attitude indicator */
+.adi{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:56px;height:56px;border:1px solid rgba(0,229,255,.3);border-radius:50%;overflow:hidden}
+.adi-sky{position:absolute;width:100%;height:50%;background:rgba(0,80,160,.35);top:0;transition:transform .15s}
+.adi-gnd{position:absolute;width:100%;height:50%;background:rgba(60,30,0,.35);bottom:0}
+.adi-line{position:absolute;top:50%;left:0;width:100%;height:1px;background:rgba(0,229,255,.5);transform:translateY(-50%)}
+
+/* crosshair */
+.xhair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:32px;height:32px;pointer-events:none}
+.xhair::before,.xhair::after{content:'';position:absolute;background:rgba(0,229,255,.4)}
+.xhair::before{width:100%;height:1px;top:50%;left:0}
+.xhair::after{height:100%;width:1px;left:50%;top:0}
+
+/* DRONE */
+.drone-scene{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);transition:transform .08s}
+.drone-wrap{position:relative;width:70px;height:70px;transition:transform .08s}
+
+.d-arm{position:absolute;height:5px;width:54px;background:linear-gradient(90deg,#0d3050,#1a5a8a);border-radius:2px;top:50%;left:50%;transform-origin:left center;box-shadow:0 0 4px rgba(0,140,220,.4)}
+.da1{transform:translateY(-50%) rotate(45deg)}
+.da2{transform:translateY(-50%) rotate(135deg)}
+.da3{transform:translateY(-50%) rotate(225deg)}
+.da4{transform:translateY(-50%) rotate(315deg)}
+
+.d-hub{position:absolute;width:20px;height:20px;background:radial-gradient(circle,#1a6a9a,#082a4a);border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);border:1.5px solid var(--cyan);box-shadow:0 0 12px rgba(0,229,255,.5);z-index:2}
+
+.d-motor{position:absolute;width:13px;height:13px;border-radius:50%;background:#0d2540;border:1px solid var(--cyan2);transform:translate(-50%,-50%)}
+.dm1{top:7px;left:63px}.dm2{top:63px;left:63px}.dm3{top:63px;left:7px}.dm4{top:7px;left:7px}
+
+.prop-wrap{position:absolute;width:30px;height:30px;transform:translate(-50%,-50%)}
+.pw1{top:7px;left:63px}.pw2{top:63px;left:63px}.pw3{top:63px;left:7px}.pw4{top:7px;left:7px}
+.prop{position:absolute;width:26px;height:3px;background:rgba(0,229,255,.65);border-radius:2px;top:50%;left:50%;transform:translate(-50%,-50%)}
+.prop-v{position:absolute;width:3px;height:26px;background:rgba(0,229,255,.65);border-radius:2px;top:50%;left:50%;transform:translate(-50%,-50%)}
+
+.spin-cw{animation:spinCW .07s linear infinite}
+.spin-ccw{animation:spinCCW .07s linear infinite}
+.spin-idle{animation:spinCW .4s linear infinite}
+@keyframes spinCW{to{transform:rotate(360deg)}}
+@keyframes spinCCW{to{transform:rotate(-360deg)}}
+
+.led-f{position:absolute;top:-3px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink .5s infinite}
+.led-b{position:absolute;bottom:-3px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--red);animation:blink .7s infinite}
+
+/* crash */
+.crash-veil{display:none;position:absolute;inset:0;background:rgba(255,0,0,.12);z-index:500;align-items:center;justify-content:center;flex-direction:column;gap:8px}
+.crash-veil.show{display:flex;animation:crashIn .4s}
+@keyframes crashIn{0%{background:rgba(255,0,0,.5)}100%{background:rgba(255,0,0,.12)}}
+.crash-msg{font-family:var(--display);font-size:28px;font-weight:700;color:var(--red);text-shadow:0 0 30px var(--red);text-align:center;letter-spacing:3px}
+
+/* ── TERMINAL SECTION ── */
+.terminal-section {
+  display: grid;
+  grid-template-rows: 36px 28px 1fr 32px;
+  border-top: 1px solid var(--border);
+  background: #030b12;
+  overflow: hidden;
+}
+
+.term-topbar {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  gap: 8px;
+}
+
+.term-title { font-family:var(--display);font-size:11px;letter-spacing:2px;color:var(--cyan);font-weight:600; }
+
+.term-tabs-row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+  background: #020a10;
+  overflow-x: auto;
+}
+.ttab {
+  font-size: 9px;
+  font-family: var(--mono);
+  padding: 0 12px;
+  color: var(--textdim);
+  cursor: pointer;
+  border-right: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  transition: all .2s;
+}
+.ttab.active{color:var(--cyan);background:rgba(0,229,255,.06);border-bottom:2px solid var(--cyan)}
+.ttab:hover:not(.active){color:var(--text)}
+.ttab-dot{width:5px;height:5px;border-radius:50%;background:var(--green)}
+
+.editor-wrap {
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+.line-gutter {
+  width: 40px;
+  background: rgba(0,15,25,.6);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--textdim);
+  text-align: right;
+  user-select: none;
+  padding-top: 6px;
+}
+.ln{height:17px;line-height:17px;padding-right:8px;font-size:10px}
+
+.code-textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #8dd4f0;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 17px;
+  padding: 6px 10px;
+  resize: none;
+  caret-color: var(--cyan);
+  tab-size: 4;
+}
+.code-textarea::selection{background:rgba(0,229,255,.18)}
+
+/* error underline layer */
+.code-highlight {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  padding: 6px 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 17px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow: hidden;
+}
+
+.term-actions-bar {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.abtn {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 3px 12px;
+  border-radius: 2px;
+  cursor: pointer;
+  border: 1px solid;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  transition: all .18s;
+}
+.abtn-run{color:var(--green);border-color:var(--green);background:rgba(0,255,136,.06)}
+.abtn-run:hover{background:rgba(0,255,136,.15);box-shadow:0 0 10px rgba(0,255,136,.3)}
+.abtn-run:disabled{opacity:.35;cursor:not-allowed}
+.abtn-stop{color:var(--red);border-color:var(--red);background:rgba(255,34,85,.06)}
+.abtn-stop:hover{background:rgba(255,34,85,.15)}
+.abtn-clear{color:var(--textdim);border-color:var(--textdim);background:transparent}
+.abtn-clear:hover{color:var(--text);border-color:var(--text)}
+
+.ex-select {
+  font-family: var(--mono);
+  font-size: 10px;
+  background: rgba(0,30,50,.8);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 3px 8px;
+  border-radius: 2px;
+  cursor: pointer;
+  outline: none;
+}
+.ex-select option{background:#0a1622}
+
+.status-pill {
+  margin-left: auto;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 2px;
+  background: rgba(0,20,35,.8);
+  border: 1px solid var(--border);
+}
+.sp-ok{color:var(--green);border-color:rgba(0,255,136,.3)}
+.sp-err{color:var(--red);border-color:rgba(255,34,85,.3)}
+.sp-run{color:var(--yellow);border-color:rgba(255,214,0,.3)}
+.sp-idle{color:var(--textdim)}
+
+/* upload animation */
+.upload-modal {
+  display: none;
+  position: absolute;
+  inset: 0;
+  background: rgba(3,11,18,.92);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 20;
+}
+.upload-modal.show{display:flex}
+.upm-title{font-family:var(--display);font-size:13px;letter-spacing:2px;color:var(--green);font-weight:600}
+.upm-bar-wrap{width:220px;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.upm-bar{height:100%;width:0%;background:var(--green);box-shadow:0 0 8px var(--green);transition:width .04s linear}
+.upm-step{font-size:9px;color:var(--textdim);letter-spacing:1px}
+
+/* ── RIGHT: Remote + Telemetry ── */
+.right-panel {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+/* Telemetry */
+.telem-block {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.block-title {
+  font-family: var(--display);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--cyan2);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.telem-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.tc{background:rgba(0,20,35,.7);border:1px solid var(--border);border-radius:3px;padding:5px 7px}
+.tc-lbl{font-size:8px;color:var(--textdim);letter-spacing:1px;margin-bottom:1px}
+.tc-val{font-family:var(--display);font-size:18px;font-weight:700;color:var(--cyan);line-height:1}
+.tc-unit{font-size:8px;color:var(--textdim)}
+
+/* Motor bars */
+.motor-block{padding:8px 12px;border-bottom:1px solid var(--border)}
+.mbar-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:6px}
+.mbi{background:rgba(0,15,30,.7);border:1px solid var(--border);border-radius:3px;padding:5px 7px}
+.mbi-top{display:flex;justify-content:space-between;font-size:9px;margin-bottom:3px}
+.mbi-lbl{color:var(--textdim)}
+.mbi-pct{color:var(--cyan)}
+.mbi-track{height:5px;background:rgba(0,40,60,.6);border-radius:3px;overflow:hidden}
+.mbi-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--cyan2),var(--green));box-shadow:0 0 5px var(--cyan2);transition:width .15s}
+
+/* ── REMOTE CONTROLLER ── */
+.remote-block {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  flex: 1;
+}
+
+.remote-body {
+  background: linear-gradient(135deg, #0d1f30, #091520);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 14px 12px 10px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.6), inset 0 1px 0 rgba(0,229,255,.08);
+  position: relative;
+}
+
+.remote-grip {
+  position: absolute;
+  bottom: -8px;
+  width: 35%;
+  height: 16px;
+  background: #091520;
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+}
+.remote-grip-l{left:10%}
+.remote-grip-r{right:10%}
+
+.remote-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.remote-brand {
+  font-family: var(--display);
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: var(--textdim);
+  font-weight: 600;
+}
+
+.rc-leds {
+  display: flex;
+  gap: 4px;
+}
+.rcled{width:6px;height:6px;border-radius:50%}
+
+/* Joystick */
+.sticks-row {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  margin: 6px 0;
+}
+
+.stick-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.stick-label {
+  font-size: 8px;
+  color: var(--textdim);
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+.joystick {
+  width: 70px;
+  height: 70px;
+  background: radial-gradient(circle, #0d2540, #060f1a);
+  border: 2px solid var(--border2);
+  border-radius: 50%;
+  position: relative;
+  cursor: crosshair;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,.8), 0 0 10px rgba(0,229,255,.08);
+  touch-action: none;
+}
+
+.joystick::before {
+  content:'';
+  position:absolute;
+  inset:8px;
+  border-radius:50%;
+  border:1px solid rgba(0,229,255,.1);
+}
+
+.joystick::after {
+  content:'';
+  position:absolute;
+  top:50%;left:50%;
+  width:1px;height:1px;
+  box-shadow: 16px 0 0 1px rgba(0,229,255,.15), -16px 0 0 1px rgba(0,229,255,.15), 0 16px 0 1px rgba(0,229,255,.15), 0 -16px 0 1px rgba(0,229,255,.15);
+}
+
+.stick-knob {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  background: radial-gradient(circle at 40% 35%, #2a6090, #0a2a40);
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--cyan2);
+  box-shadow: 0 0 8px rgba(0,229,255,.4), 0 2px 4px rgba(0,0,0,.6);
+  transition: box-shadow .1s;
+  pointer-events: none;
+}
+
+/* RC buttons between sticks */
+.rc-mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.rc-mid-btn {
+  width: 22px;height:14px;
+  border-radius:3px;
+  border:1px solid var(--border2);
+  background:#060f1a;
+  cursor:pointer;
+  font-size:7px;
+  color:var(--textdim);
+  display:flex;align-items:center;justify-content:center;
+  letter-spacing:.5px;
+  transition:all .15s;
+}
+.rc-mid-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+.rc-mid-btn.active{background:rgba(0,229,255,.15);border-color:var(--cyan);color:var(--cyan)}
+
+/* RC bottom row */
+.rc-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  padding: 0 4px;
+}
+
+.rc-bumper {
+  display: flex;
+  gap: 3px;
+}
+.rcbump {
+  width: 28px;height:10px;
+  border-radius:5px;
+  border:1px solid var(--border);
+  background:#060f1a;
+  cursor:pointer;
+  transition:all .15s;
+}
+.rcbump:hover{border-color:var(--cyan2);background:rgba(0,180,200,.1)}
+.rcbump.pressed{background:rgba(0,229,255,.2);border-color:var(--cyan)}
+
+.rc-screen {
+  width: 50px;height:22px;
+  background:#020810;
+  border:1px solid var(--border);
+  border-radius:2px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:8px;
+  color:var(--cyan2);
+}
+
+/* Flight Log */
+.log-block {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.log-inner {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 12px;
+  font-size: 10px;
+}
+.log-row { display:flex;gap:8px;padding:1px 0;border-bottom:1px solid rgba(0,40,60,.3); }
+.lt{color:var(--textdim);min-width:32px}
+.lc-info{color:var(--cyan2)}
+.lc-ok{color:var(--green)}
+.lc-err{color:var(--red)}
+.lc-warn{color:var(--yellow)}
+
+/* Error panel */
+.err-panel {
+  padding: 0 12px 8px;
+  font-size: 10px;
+  display: none;
+}
+.err-panel.show { display: block; }
+.err-line {
+  display: flex;
+  gap: 6px;
+  padding: 3px 6px;
+  background: rgba(255,34,85,.08);
+  border: 1px solid rgba(255,34,85,.2);
+  border-radius: 2px;
+  margin: 2px 0;
+  align-items: flex-start;
+}
+.err-icon { color: var(--red); }
+.err-text { color: var(--red); flex: 1; }
+.err-fix { color: var(--yellow); font-size: 9px; margin-top: 1px; }
+.err-ln { color: var(--textdim); min-width: 30px; }
+
+::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo">FPV<b>SIM</b> <span style="font-size:11px;color:var(--textdim)">PRO</span></div>
+  <div class="top-status">
+    <div class="ts"><div class="dot dot-g"></div> TELEMETRY</div>
+    <div class="ts"><div class="dot" id="armStatusDot" style="background:var(--red);box-shadow:0 0 6px var(--red)"></div> <span id="armStatusTxt">DISARMED</span></div>
+    <div class="ts"><div class="dot dot-y"></div> GPS 12-SAT</div>
+    <div class="ts">BAT <span id="batVal" style="color:var(--green)">87%</span></div>
+    <div class="ts" id="flightTimeTxt" style="color:var(--cyan)">T+00:00</div>
+  </div>
+  <div class="top-right">
+    <button class="tbtn tbtn-reset" onclick="resetDrone()">⟳ RESET</button>
+    <button class="tbtn tbtn-arm" id="armBtn" onclick="toggleArm()">ARM</button>
+  </div>
+</div>
+
+<!-- LEFT PANEL -->
+<div class="left-panel">
+
+  <!-- VIEWPORT -->
+  <div class="viewport">
+    <div class="vp-grid"></div>
+
+    <div class="adi"><div class="adi-sky" id="adiSky"></div><div class="adi-gnd"></div><div class="adi-line"></div></div>
+    <div class="alt-bar"><div class="alt-fill" id="altFill" style="height:0%"></div></div>
+    <div class="xhair"></div>
+
+    <div class="hud hud-tl">
+      <div>MODE <span id="hudMode">STAB</span></div>
+      <div>HDG <span id="hudHdg">000</span>°</div>
+      <div>SPD <span id="hudSpd">0.0</span>m/s</div>
+    </div>
+    <div class="hud hud-tr">
+      <div>ALT <span id="hudAlt">0.0</span>m</div>
+      <div>THR <span id="hudThr">0</span>%</div>
+      <div>RSSI <span style="color:var(--green)">-62</span></div>
+    </div>
+    <div class="hud hud-bl">
+      <div>ROLL <span id="hudRoll">0.0</span>°</div>
+      <div>PITCH <span id="hudPitch">0.0</span>°</div>
+      <div>YAW <span id="hudYaw">0</span>°</div>
+    </div>
+    <div class="hud hud-br">
+      <div>LAT 23.8103N</div>
+      <div>LON 90.4125E</div>
+      <div id="hudLink" style="color:var(--green)">LINK OK</div>
+    </div>
+
+    <div class="drone-scene" id="droneScene">
+      <div class="drone-wrap" id="droneWrap">
+        <div class="d-arm da1"></div><div class="d-arm da2"></div>
+        <div class="d-arm da3"></div><div class="d-arm da4"></div>
+        <div class="d-hub"></div>
+        <div class="d-motor dm1"></div><div class="d-motor dm2"></div>
+        <div class="d-motor dm3"></div><div class="d-motor dm4"></div>
+        <div class="prop-wrap pw1" id="pw1"><div class="prop"></div><div class="prop-v"></div></div>
+        <div class="prop-wrap pw2" id="pw2"><div class="prop"></div><div class="prop-v"></div></div>
+        <div class="prop-wrap pw3" id="pw3"><div class="prop"></div><div class="prop-v"></div></div>
+        <div class="prop-wrap pw4" id="pw4"><div class="prop"></div><div class="prop-v"></div></div>
+        <div class="led-f"></div><div class="led-b"></div>
+      </div>
+    </div>
+
+    <div class="crash-veil" id="crashVeil">
+      <div class="crash-msg">⚠ CRASH<br><span style="font-size:14px;letter-spacing:1px">PRESS RESET</span></div>
+    </div>
+  </div>
+
+  <!-- TERMINAL -->
+  <div class="terminal-section">
+    <div class="term-topbar">
+      <div class="term-title">◈ FLIGHT CODE TERMINAL</div>
+      <div style="margin-left:auto;font-size:9px;color:var(--textdim)">C-SYNTAX · REAL-TIME LINT</div>
+    </div>
+
+    <div class="term-tabs-row">
+      <div class="ttab active"><div class="ttab-dot"></div>main.c</div>
+      <div class="ttab" style="cursor:default">config.h</div>
+      <div class="ttab" style="cursor:default">pid.h</div>
+      <div style="margin-left:auto;display:flex;align-items:center;padding:0 8px;gap:6px">
+        <select class="ex-select" id="exSelect" onchange="loadExample()">
+          <option value="">── Load Example ──</option>
+          <option value="takeoff">takeoff.c</option>
+          <option value="hover">stable_hover.c</option>
+          <option value="yaw_spin">yaw_360.c</option>
+          <option value="forward">forward_flight.c</option>
+          <option value="square">square_path.c</option>
+          <option value="flip">backflip.c</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="editor-wrap">
+      <div class="line-gutter" id="gutter"><div class="ln">1</div></div>
+      <textarea class="code-textarea" id="codeTA" spellcheck="false"
+        placeholder="#include &lt;drone.h&gt;
+
+// ── Available Functions ──────────────────
+// arm()                  arm the drone
+// disarm()               disarm
+// throttle(int pct)      set throttle 0-100
+// yaw(float deg)         rotate left/right
+// pitch(float deg)       forward/backward tilt
+// roll(float deg)        left/right tilt
+// hover()                auto-level & hold alt
+// land()                 smooth landing
+// delay_ms(int ms)       wait milliseconds
+// set_pid(float p, float i, float d)
+// ────────────────────────────────────────
+"></textarea>
+      <div class="upload-modal" id="upModal">
+        <div class="upm-title" id="upTitle">COMPILING</div>
+        <div class="upm-bar-wrap"><div class="upm-bar" id="upBar"></div></div>
+        <div class="upm-step" id="upStep">Parsing source...</div>
+      </div>
+    </div>
+
+    <div class="term-actions-bar">
+      <button class="abtn abtn-run" id="runBtn" onclick="uploadAndRun()">▶ COMPILE & RUN</button>
+      <button class="abtn abtn-stop" id="stopBtn" onclick="stopFlight()" style="display:none">■ STOP</button>
+      <button class="abtn abtn-clear" onclick="clearEditor()">CLR</button>
+      <div class="status-pill sp-idle" id="statusPill">IDLE</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- RIGHT PANEL -->
+<div class="right-panel">
+
+  <!-- Telemetry -->
+  <div class="telem-block">
+    <div class="block-title">TELEMETRY</div>
+    <div class="telem-grid">
+      <div class="tc"><div class="tc-lbl">ALTITUDE</div><span class="tc-val" id="tAlt">0.0</span><span class="tc-unit"> m</span></div>
+      <div class="tc"><div class="tc-lbl">THROTTLE</div><span class="tc-val" id="tThr">0</span><span class="tc-unit"> %</span></div>
+      <div class="tc"><div class="tc-lbl">YAW</div><span class="tc-val" id="tYaw">0</span><span class="tc-unit"> °</span></div>
+      <div class="tc"><div class="tc-lbl">HEADING</div><span class="tc-val" id="tHdg">000</span><span class="tc-unit"> °</span></div>
+      <div class="tc"><div class="tc-lbl">PITCH</div><span class="tc-val" id="tPitch">0.0</span><span class="tc-unit"> °</span></div>
+      <div class="tc"><div class="tc-lbl">ROLL</div><span class="tc-val" id="tRoll">0.0</span><span class="tc-unit"> °</span></div>
+    </div>
+  </div>
+
+  <!-- Motors -->
+  <div class="motor-block">
+    <div class="block-title">MOTOR PWM</div>
+    <div class="mbar-grid">
+      <div class="mbi"><div class="mbi-top"><span class="mbi-lbl">M1 FL</span><span class="mbi-pct" id="m1p">0%</span></div><div class="mbi-track"><div class="mbi-fill" id="m1b" style="width:0%"></div></div></div>
+      <div class="mbi"><div class="mbi-top"><span class="mbi-lbl">M2 FR</span><span class="mbi-pct" id="m2p">0%</span></div><div class="mbi-track"><div class="mbi-fill" id="m2b" style="width:0%"></div></div></div>
+      <div class="mbi"><div class="mbi-top"><span class="mbi-lbl">M3 RL</span><span class="mbi-pct" id="m3p">0%</span></div><div class="mbi-track"><div class="mbi-fill" id="m3b" style="width:0%"></div></div></div>
+      <div class="mbi"><div class="mbi-top"><span class="mbi-lbl">M4 RR</span><span class="mbi-pct" id="m4p">0%</span></div><div class="mbi-track"><div class="mbi-fill" id="m4b" style="width:0%"></div></div></div>
+    </div>
+  </div>
+
+  <!-- REMOTE CONTROLLER -->
+  <div class="remote-block">
+    <div class="block-title">RC TRANSMITTER</div>
+    <div class="remote-body">
+      <div class="remote-grip remote-grip-l"></div>
+      <div class="remote-grip remote-grip-r"></div>
+
+      <div class="remote-top-row">
+        <div class="remote-brand">FPV·TX·5.8G</div>
+        <div class="rc-leds">
+          <div class="rcled" style="background:var(--green);box-shadow:0 0 5px var(--green)"></div>
+          <div class="rcled" id="rcLed2" style="background:var(--textdim)"></div>
+          <div class="rcled" style="background:var(--yellow);box-shadow:0 0 5px var(--yellow)"></div>
+        </div>
+      </div>
+
+      <div class="sticks-row">
+        <!-- Left stick: Throttle(up/down) + Yaw(left/right) -->
+        <div class="stick-wrap">
+          <div class="joystick" id="jsLeft" onmousedown="startDrag('left',event)" ontouchstart="startDragT('left',event)">
+            <div class="stick-knob" id="knobL"></div>
+          </div>
+          <div class="stick-label">THR / YAW</div>
+        </div>
+
+        <div class="rc-mid">
+          <div class="rc-mid-btn" id="rcArm" onclick="toggleArm()">ARM</div>
+          <div class="rc-screen" id="rcScreen">00:00</div>
+          <div class="rc-mid-btn" onclick="resetDrone()">RST</div>
+        </div>
+
+        <!-- Right stick: Pitch(up/down) + Roll(left/right) -->
+        <div class="stick-wrap">
+          <div class="joystick" id="jsRight" onmousedown="startDrag('right',event)" ontouchstart="startDragT('right',event)">
+            <div class="stick-knob" id="knobR"></div>
+          </div>
+          <div class="stick-label">PITCH / ROLL</div>
+        </div>
+      </div>
+
+      <div class="rc-bottom">
+        <div class="rc-bumper">
+          <div class="rcbump" id="lb1" title="Trim -"></div>
+          <div class="rcbump" id="lb2" title="Trim +"></div>
+        </div>
+        <div style="font-size:8px;color:var(--textdim)">CH8 ▸▸</div>
+        <div class="rc-bumper">
+          <div class="rcbump" id="rb1" title="Mode"></div>
+          <div class="rcbump" id="rb2" title="Hold"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="log-block">
+    <div style="padding:6px 12px 4px;border-top:1px solid var(--border)">
+      <div class="block-title" style="margin:0">FLIGHT LOG</div>
+    </div>
+    <div class="err-panel" id="errPanel"></div>
+    <div class="log-inner" id="logInner">
+      <div class="log-row"><span class="lt">00:00</span><span class="lc-info">SIM READY — ARM TO FLY</span></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ════════════════════════════════════
+//  STATE
+// ════════════════════════════════════
+const S = {
+  armed: false, crashed: false, running: false,
+  alt: 0, thr: 0, pitch: 0, roll: 0, yaw: 0, heading: 0,
+  posX: 0, posY: 0, speed: 0,
+  motors: [0,0,0,0],
+  flightStart: null,
+  stopFlag: false
+};
+
+const keys = {};
+let animFrame;
+
+// ════════════════════════════════════
+//  ARM / DISARM
+// ════════════════════════════════════
+function toggleArm() {
+  if (S.crashed) { addLog('err','RESET first'); return; }
+  S.armed = !S.armed;
+  const btn = document.getElementById('armBtn');
+  const dot = document.getElementById('armStatusDot');
+  const lbl = document.getElementById('armStatusTxt');
+  const rc  = document.getElementById('rcArm');
+  const led = document.getElementById('rcLed2');
+
+  if (S.armed) {
+    btn.classList.add('armed'); btn.textContent = 'DISARM';
+    dot.style.cssText = 'background:var(--green);box-shadow:0 0 6px var(--green)';
+    lbl.textContent = 'ARMED';
+    rc.classList.add('active');
+    led.style.cssText = 'background:var(--green);box-shadow:0 0 5px var(--green)';
+    idleProps(true);
+    addLog('warn','DRONE ARMED');
+  } else {
+    btn.classList.remove('armed'); btn.textContent = 'ARM';
+    dot.style.cssText = 'background:var(--red);box-shadow:0 0 6px var(--red)';
+    lbl.textContent = 'DISARMED';
+    rc.classList.remove('active');
+    led.style.cssText = 'background:var(--textdim)';
+    idleProps(false);
+    zeroMotors();
+    S.thr = 0; S.alt = 0; S.pitch = 0; S.roll = 0;
+    addLog('info','DISARMED');
+  }
+}
+
+function idleProps(on) {
+  const spd = on ? '0.45s' : '0s';
+  ['pw1','pw2','pw3','pw4'].forEach((id,i) => {
+    const el = document.getElementById(id);
+    el.style.animation = on ? (i%2===0?'spinCW':'spinCCW')+' '+spd+' linear infinite' : 'none';
+  });
+}
+
+function zeroMotors() {
+  setMotors(0,0,0,0);
+  idleProps(false);
+}
+
+function resetDrone() {
+  S.crashed=false; S.armed=false; S.running=false; S.stopFlag=true;
+  S.alt=0; S.thr=0; S.pitch=0; S.roll=0; S.yaw=0; S.heading=0;
+  S.posX=0; S.posY=0; S.speed=0; S.flightStart=null;
+  document.getElementById('crashVeil').classList.remove('show');
+  document.getElementById('armBtn').classList.remove('armed');
+  document.getElementById('armBtn').textContent='ARM';
+  document.getElementById('armStatusDot').style.cssText='background:var(--red);box-shadow:0 0 6px var(--red)';
+  document.getElementById('armStatusTxt').textContent='DISARMED';
+  document.getElementById('rcArm').classList.remove('active');
+  document.getElementById('rcLed2').style.cssText='background:var(--textdim)';
+  document.getElementById('runBtn').style.display='';
+  document.getElementById('stopBtn').style.display='none';
+  setStatus('idle','IDLE');
+  zeroMotors();
+  // Reset joystick knobs
+  JS.left.x=0; JS.left.y=0; JS.left.active=false;
+  JS.right.x=0; JS.right.y=0; JS.right.active=false;
+  setKnob('knobL',0,0); setKnob('knobR',0,0);
+  addLog('warn','DRONE RESET');
+}
+
+// ════════════════════════════════════
+//  MOTOR DISPLAY
+// ════════════════════════════════════
+function setMotors(m1,m2,m3,m4) {
+  S.motors=[m1,m2,m3,m4];
+  const ids=[['m1b','m1p'],['m2b','m2p'],['m3b','m3p'],['m4b','m4p']];
+  [m1,m2,m3,m4].forEach((v,i)=>{
+    document.getElementById(ids[i][0]).style.width=v+'%';
+    document.getElementById(ids[i][1]).textContent=Math.round(v)+'%';
+  });
+  // prop speed
+  const dur = v => v>5 ? Math.max(0.035, 0.45 - v*0.004)+'s' : '0.45s';
+  const running = S.armed;
+  ['pw1','pw2','pw3','pw4'].forEach((id,i)=>{
+    const el=document.getElementById(id);
+    const v=S.motors[i];
+    if(!running){el.style.animation='none';return;}
+    const spd=dur(v);
+    const dir=i%2===0?'spinCW':'spinCCW';
+    el.style.animation=v>5?dir+' '+spd+' linear infinite':'spinCW 0.45s linear infinite';
+  });
+}
+
+function motorsByState() {
+  const {thr,pitch,roll} = S;
+  const p = pitch/40*20, r = roll/40*20;
+  const m1=clamp(thr-r+p), m2=clamp(thr+r+p);
+  const m3=clamp(thr-r-p), m4=clamp(thr+r-p);
+  setMotors(m1,m2,m3,m4);
+}
+
+const clamp=(v,lo=0,hi=100)=>Math.min(hi,Math.max(lo,v));
+
+// ════════════════════════════════════
+//  PHYSICS LOOP
+// ════════════════════════════════════
+let lastT=0;
+function loop(ts) {
+  const dt=Math.min((ts-lastT)/1000,.05); lastT=ts;
+
+  if(S.armed && !S.crashed) {
+    // RC manual control (keyboard or joystick, when not running code)
+    if(!S.running) {
+      // Joystick takes priority
+      applyJoystick();
+      // Keyboard fallback
+      if(keys['w']||keys['W']) S.thr=clamp(S.thr+1.2);
+      if(keys['s']||keys['S']) S.thr=clamp(S.thr-1.2);
+      if(keys['a']||keys['A']){S.heading=(S.heading-3+360)%360;S.yaw-=3}
+      if(keys['d']||keys['D']){S.heading=(S.heading+3)%360;S.yaw+=3}
+      if(keys['ArrowUp'])   S.pitch=clamp(S.pitch+1.5,-45,45);
+      else if(keys['ArrowDown']) S.pitch=clamp(S.pitch-1.5,-45,45);
+      else if(!JS.right.active) S.pitch*=.93;
+      if(keys['ArrowLeft'])  S.roll=clamp(S.roll-1.5,-45,45);
+      else if(keys['ArrowRight']) S.roll=clamp(S.roll+1.5,-45,45);
+      else if(!JS.right.active) S.roll*=.93;
+    }
+
+    // Physics
+    const lift = S.thr>45?(S.thr-45)*0.042:0;
+    const grav = 0.022;
+    S.alt = clamp(S.alt+(lift-grav)*dt*60, 0, 25);
+    S.speed = Math.abs(S.pitch)*0.06;
+
+    if(S.thr>45 && S.alt<.1) { /* just lifted */ }
+    if(S.alt<=0 && S.thr<44 && S.speed>0.3) crash('HARD LANDING');
+
+    motorsByState();
+  }
+
+  renderHUD(); renderDrone();
+  animFrame=requestAnimationFrame(loop);
+}
+
+function renderHUD() {
+  const fmt1=v=>v.toFixed(1), fmtI=v=>Math.round(v), fmtHdg=v=>String(Math.round(v)).padStart(3,'0');
+  document.getElementById('hudAlt').textContent=fmt1(S.alt);
+  document.getElementById('hudThr').textContent=fmtI(S.thr);
+  document.getElementById('hudHdg').textContent=fmtHdg(S.heading);
+  document.getElementById('hudSpd').textContent=fmt1(S.speed);
+  document.getElementById('hudRoll').textContent=fmt1(S.roll);
+  document.getElementById('hudPitch').textContent=fmt1(S.pitch);
+  document.getElementById('hudYaw').textContent=fmtI(S.yaw%360);
+  document.getElementById('tAlt').textContent=fmt1(S.alt);
+  document.getElementById('tThr').textContent=fmtI(S.thr);
+  document.getElementById('tYaw').textContent=fmtI(S.yaw%360);
+  document.getElementById('tHdg').textContent=fmtHdg(S.heading);
+  document.getElementById('tPitch').textContent=fmt1(S.pitch);
+  document.getElementById('tRoll').textContent=fmt1(S.roll);
+  const altP=clamp(S.alt/25*100);
+  document.getElementById('altFill').style.height=altP+'%';
+  document.getElementById('adiSky').style.transform=`translateY(${S.pitch*.4}px) rotate(${S.roll*.5}deg)`;
+
+  if(S.flightStart) {
+    const e=Math.floor((Date.now()-S.flightStart)/1000);
+    const t=`${String(Math.floor(e/60)).padStart(2,'0')}:${String(e%60).padStart(2,'0')}`;
+    document.getElementById('flightTimeTxt').textContent='T+'+t;
+    document.getElementById('rcScreen').textContent=t;
+  }
+}
+
+function renderDrone() {
+  const scene=document.getElementById('droneScene');
+  const wrap=document.getElementById('droneWrap');
+  const altOff=-(S.alt/25)*130;
+  scene.style.transform=`translate(calc(-50% + ${S.posX*.4}px), calc(-50% + ${altOff}px))`;
+  const sc=0.75+S.alt/25*.45;
+  wrap.style.transform=`rotateX(${S.pitch*.5}deg) rotateY(${S.roll*.5}deg) rotateZ(${S.heading*.3}deg) scale(${sc})`;
+}
+
+function crash(reason) {
+  S.crashed=true; S.running=false; S.stopFlag=true; S.thr=0; S.alt=0;
+  zeroMotors();
+  document.getElementById('crashVeil').classList.add('show');
+  addLog('err','💥 CRASH: '+reason);
+  setStatus('err','CRASHED');
+}
+
+// ════════════════════════════════════
+//  C CODE PARSER & LINTER
+// ════════════════════════════════════
+
+const KNOWN_FUNCS = ['arm','disarm','throttle','yaw','pitch','roll','hover','land','delay_ms','set_pid'];
+const FUNC_ARGS   = { arm:0, disarm:0, hover:0, land:0, throttle:1, yaw:1, pitch:1, roll:1, delay_ms:1, set_pid:3 };
+const FUNC_RANGE  = { throttle:[0,100], yaw:[-360,360], pitch:[-45,45], roll:[-45,45], delay_ms:[0,10000] };
+
+function lintCode(code) {
+  const errors = [];
+  const lines = code.split('\n');
+
+  lines.forEach((rawLine, idx) => {
+    const lineNum = idx+1;
+
+    // Strip inline comments first, then trim
+    let line = rawLine.replace(/\/\/.*$/, '').trim();
+
+    // Skip blank lines, pure comment lines, preprocessor, block comment lines
+    if(!line) return;
+    if(rawLine.trim().startsWith('//')) return;
+    if(rawLine.trim().startsWith('/*') || rawLine.trim().startsWith('*')) return;
+    if(line.startsWith('#')) return;
+
+    // Skip structural C lines: void/int/float func declarations, braces, return
+    if(line.match(/^(void\s+\w+|int\s+\w+|float\s+\w+|[\{\}]|return\b)/)) return;
+
+    // Now line is a real statement — must end with ;
+    if(!line.endsWith(';')) {
+      errors.push({ line: lineNum, msg: `Missing semicolon`, fix: `Add ; at end of line ${lineNum}`, raw: rawLine });
+      return;
+    }
+
+    // Parse function call  e.g.  throttle(60);
+    const m = line.match(/^(\w+)\s*\(([^)]*)\)\s*;$/);
+    if(!m) return; // not a simple call (could be assignment etc), skip
+
+    const fn = m[1];
+    const argsStr = m[2].trim();
+    const args = argsStr === '' ? [] : argsStr.split(',').map(a => a.trim());
+
+    // Unknown function check
+    if(!KNOWN_FUNCS.includes(fn)) {
+      // Don't flag C standard keywords like if/for/while used as calls
+      if(['if','for','while','switch','return','sizeof'].includes(fn)) return;
+      errors.push({ line: lineNum, msg: `Unknown function '${fn}'`, fix: `Available: ${KNOWN_FUNCS.join(', ')}`, raw: rawLine });
+      return;
+    }
+
+    // Argument count check
+    const expectedArgs = FUNC_ARGS[fn];
+    if(args.length !== expectedArgs) {
+      errors.push({ line: lineNum, msg: `'${fn}()' expects ${expectedArgs} arg(s), got ${args.length}`, fix: `Fix: ${fn}(${expectedArgs===1?'value':expectedArgs===3?'p, i, d':''});`, raw: rawLine });
+      return;
+    }
+
+    // Value range check for single-arg functions
+    if(FUNC_RANGE[fn] && args.length === 1) {
+      const v = parseFloat(args[0]);
+      if(isNaN(v)) {
+        errors.push({ line: lineNum, msg: `'${fn}' needs a number, got '${args[0]}'`, fix: `Example: ${fn}(${FUNC_RANGE[fn][0]});`, raw: rawLine });
+      } else {
+        const [lo, hi] = FUNC_RANGE[fn];
+        if(v < lo || v > hi) {
+          errors.push({ line: lineNum, msg: `${fn}(${v}) out of range [${lo} to ${hi}]`, fix: `Use a value between ${lo} and ${hi}`, raw: rawLine });
+        }
+      }
+    }
+  });
+
+  return errors;
+}
+
+function showErrors(errors) {
+  const panel = document.getElementById('errPanel');
+  if(!errors.length){panel.classList.remove('show');panel.innerHTML='';return;}
+  panel.classList.add('show');
+  panel.innerHTML = errors.slice(0,4).map(e=>
+    `<div class="err-line">
+      <span class="err-icon">✕</span>
+      <div><div class="err-text">Line ${e.line}: ${e.msg}</div><div class="err-fix">→ ${e.fix}</div></div>
+    </div>`
+  ).join('');
+}
+
+// ════════════════════════════════════
+//  EXAMPLES
+// ════════════════════════════════════
+const EXAMPLES = {
+takeoff:
+`#include <drone.h>
+
+void setup() {
+    // Simple takeoff sequence
+    arm();
+    delay_ms(500);
+
+    throttle(50);       // Spin up motors
+    delay_ms(400);
+
+    throttle(62);       // Lift off
+    delay_ms(800);
+
+    throttle(58);       // Climb steady
+    delay_ms(2000);
+
+    hover();            // Hold altitude
+    delay_ms(3000);
+
+    land();             // Smooth descent
+    disarm();
+}`,
+
+hover:
+`#include <drone.h>
+
+void setup() {
+    arm();
+    delay_ms(300);
+
+    // Take off and hover at ~3m
+    throttle(60);
+    delay_ms(1500);
+
+    hover();
+    delay_ms(5000);     // Hold for 5 seconds
+
+    land();
+    disarm();
+}`,
+
+yaw_spin:
+`#include <drone.h>
+
+void setup() {
+    arm();
+    delay_ms(300);
+
+    throttle(60);
+    delay_ms(1000);
+    hover();
+
+    // Rotate 360 degrees clockwise
+    yaw(90);
+    delay_ms(800);
+    yaw(90);
+    delay_ms(800);
+    yaw(90);
+    delay_ms(800);
+    yaw(90);
+    delay_ms(800);
+
+    hover();
+    delay_ms(1000);
+    land();
+    disarm();
+}`,
+
+forward:
+`#include <drone.h>
+
+void setup() {
+    arm();
+    delay_ms(300);
+
+    throttle(60);
+    delay_ms(1000);
+    hover();
+    delay_ms(500);
+
+    // Fly forward then return
+    pitch(18);          // Lean forward
+    delay_ms(2500);
+
+    pitch(0);           // Level out
+    delay_ms(400);
+
+    pitch(-18);         // Fly back
+    delay_ms(2500);
+
+    pitch(0);
+    hover();
+    delay_ms(800);
+    land();
+    disarm();
+}`,
+
+square:
+`#include <drone.h>
+
+void setup() {
+    arm();
+    delay_ms(300);
+
+    throttle(62);
+    delay_ms(1200);
+    hover();
+
+    // Fly a square path
+    pitch(20);
+    delay_ms(1200);
+    pitch(0);
+    delay_ms(300);
+    yaw(90);
+    delay_ms(500);
+
+    pitch(20);
+    delay_ms(1200);
+    pitch(0);
+    delay_ms(300);
+    yaw(90);
+    delay_ms(500);
+
+    pitch(20);
+    delay_ms(1200);
+    pitch(0);
+    delay_ms(300);
+    yaw(90);
+    delay_ms(500);
+
+    pitch(20);
+    delay_ms(1200);
+    pitch(0);
+    delay_ms(300);
+    yaw(90);
+    delay_ms(500);
+
+    hover();
+    delay_ms(1000);
+    land();
+    disarm();
+}`,
+
+flip:
+`#include <drone.h>
+// Advanced: backflip trick
+// Requires altitude > 6m first!
+
+void setup() {
+    arm();
+    delay_ms(300);
+
+    // Gain safe altitude
+    throttle(72);
+    delay_ms(3000);
+    hover();
+    delay_ms(500);
+
+    // Backflip
+    pitch(-30);
+    delay_ms(80);
+    throttle(100);
+    pitch(-45);
+    delay_ms(350);
+    pitch(0);
+    throttle(62);
+    delay_ms(300);
+    hover();
+
+    delay_ms(1500);
+    land();
+    disarm();
+}`
+};
+
+function loadExample() {
+  const sel = document.getElementById('exSelect');
+  const key = sel.value;
+  if(!key) return;
+  document.getElementById('codeTA').value = EXAMPLES[key];
+  updateGutter();
+  realTimeLint();
+  addLog('info','Loaded: '+key+'.c');
+  sel.value='';
+}
+
+// ════════════════════════════════════
+//  UPLOAD & RUN
+// ════════════════════════════════════
+async function uploadAndRun() {
+  if(!S.armed){addLog('err','ARM the drone first!');setStatus('err','NOT ARMED');return;}
+  if(S.running){addLog('warn','Already running');return;}
+  if(S.crashed){addLog('err','RESET first');return;}
+
+  const code = document.getElementById('codeTA').value.trim();
+  if(!code){addLog('err','No code to run');return;}
+
+  const errors = lintCode(code);
+  showErrors(errors);
+  if(errors.length){
+    addLog('err',`${errors.length} error(s) found — fix before running`);
+    setStatus('err',`${errors.length} ERROR(S)`);
+    return;
+  }
+
+  // Upload animation
+  const modal=document.getElementById('upModal');
+  const bar=document.getElementById('upBar');
+  const title=document.getElementById('upTitle');
+  const step=document.getElementById('upStep');
+
+  modal.classList.add('show');
+  const steps=[
+    [0,30,400,'COMPILING','Tokenizing source...'],
+    [30,55,300,'COMPILING','Building AST...'],
+    [55,75,250,'LINKING','Resolving symbols...'],
+    [75,90,200,'FLASHING','Writing firmware...'],
+    [90,100,150,'FLASHING','Verifying CRC...'],
+  ];
+  for(const [from,to,dur,ttl,msg] of steps){
+    title.textContent=ttl; step.textContent=msg;
+    await animBar(bar,from,to,dur);
+  }
+  modal.classList.remove('show');
+
+  addLog('ok','Upload OK — executing');
+  setStatus('run','RUNNING');
+  document.getElementById('runBtn').style.display='none';
+  document.getElementById('stopBtn').style.display='';
+
+  S.running=true; S.stopFlag=false;
+  S.flightStart=Date.now();
+  await execCode(code);
+
+  if(!S.stopFlag) {
+    addLog('ok','Flight sequence complete');
+    setStatus('ok','DONE');
+  }
+  S.running=false;
+  document.getElementById('runBtn').style.display='';
+  document.getElementById('stopBtn').style.display='none';
+}
+
+function stopFlight(){
+  S.stopFlag=true; S.running=false;
+  addLog('warn','Flight stopped by user');
+  setStatus('idle','STOPPED');
+  document.getElementById('runBtn').style.display='';
+  document.getElementById('stopBtn').style.display='none';
+}
+
+async function execCode(code) {
+  const cmds = parseCode(code);
+  for(const cmd of cmds) {
+    if(S.stopFlag||S.crashed) break;
+    await execCmd(cmd);
+  }
+}
+
+function parseCode(code) {
+  const cmds=[];
+  for(const raw of code.split('\n')) {
+    const line=raw.trim().replace(/\/\/.*$/,'').trim();
+    if(!line||line.startsWith('#')||line.match(/^(void|int|float|\{|\})/)) continue;
+    const m=line.match(/^(\w+)\s*\(([^)]*)\)\s*;?$/);
+    if(!m) continue;
+    const fn=m[1], argsStr=m[2].trim();
+    const args=argsStr===''?[]:argsStr.split(',').map(a=>parseFloat(a.trim()));
+    cmds.push({fn, args});
+  }
+  return cmds;
+}
+
+async function execCmd({fn,args}) {
+  if(S.stopFlag||S.crashed) return;
+  const a=args[0]??0;
+  switch(fn) {
+    case 'arm':
+      if(!S.armed) toggleArm();
+      break;
+    case 'disarm':
+      if(S.armed) toggleArm();
+      break;
+    case 'throttle':
+      S.thr=clamp(a,0,100);
+      addLog('info',`throttle(${a})`);
+      if(S.thr>45) S.flightStart=S.flightStart||Date.now();
+      break;
+    case 'yaw':
+      addLog('info',`yaw(${a}°)`);
+      await animYaw(a);
+      break;
+    case 'pitch':
+      S.pitch=clamp(a,-45,45);
+      addLog('info',`pitch(${a}°)`);
+      break;
+    case 'roll':
+      S.roll=clamp(a,-45,45);
+      addLog('info',`roll(${a}°)`);
+      break;
+    case 'hover':
+      S.pitch=0; S.roll=0;
+      addLog('info','hover()');
+      break;
+    case 'land':
+      addLog('info','land() descending...');
+      await animLand();
+      break;
+    case 'set_pid':
+      addLog('info',`set_pid(${args.join(',')})`);
+      break;
+    case 'delay_ms':
+      await sleep(clamp(a,0,10000));
+      break;
+  }
+}
+
+async function animYaw(deg) {
+  const steps=24, step=deg/steps;
+  for(let i=0;i<steps;i++){
+    if(S.stopFlag||S.crashed) break;
+    S.heading=(S.heading+step+360)%360;
+    S.yaw+=step;
+    await sleep(40);
+  }
+}
+
+async function animLand() {
+  while(S.alt>0.05 && !S.stopFlag && !S.crashed) {
+    S.thr=Math.max(0,S.thr-2);
+    await sleep(40);
+  }
+  S.alt=0; S.thr=0; S.pitch=0; S.roll=0;
+  addLog('ok','Landed ✓');
+}
+
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+
+async function animBar(bar,from,to,dur){
+  return new Promise(r=>{
+    const t0=performance.now();
+    const tick=now=>{
+      const p=Math.min((now-t0)/dur,1);
+      bar.style.width=(from+(to-from)*p)+'%';
+      p<1?requestAnimationFrame(tick):r();
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+// ════════════════════════════════════
+//  REAL-TIME LINT
+// ════════════════════════════════════
+function realTimeLint() {
+  const code = document.getElementById('codeTA').value;
+  const errors = lintCode(code);
+  showErrors(errors);
+  const pill = document.getElementById('statusPill');
+  if(S.running) return;
+  if(errors.length) { setStatus('err',errors.length+' ERROR(S)'); }
+  else if(code.trim()) { setStatus('ok','OK'); }
+  else setStatus('idle','IDLE');
+}
+
+function setStatus(type, txt) {
+  const el=document.getElementById('statusPill');
+  el.className='status-pill sp-'+({idle:'idle',ok:'ok',err:'err',run:'run'}[type]||'idle');
+  el.textContent=txt;
+}
+
+// ════════════════════════════════════
+//  EDITOR
+// ════════════════════════════════════
+function updateGutter() {
+  const ta=document.getElementById('codeTA');
+  const lines=ta.value.split('\n').length;
+  const g=document.getElementById('gutter');
+  let html='';
+  for(let i=1;i<=lines;i++) html+=`<div class="ln">${i}</div>`;
+  g.innerHTML=html;
+}
+
+document.getElementById('codeTA').addEventListener('input',()=>{updateGutter();realTimeLint();});
+document.getElementById('codeTA').addEventListener('scroll',function(){document.getElementById('gutter').scrollTop=this.scrollTop;});
+document.getElementById('codeTA').addEventListener('keydown',function(e){
+  if(e.key==='Tab'){
+    e.preventDefault();
+    const s=this.selectionStart;
+    this.value=this.value.substring(0,s)+'    '+this.value.substring(this.selectionEnd);
+    this.selectionStart=this.selectionEnd=s+4;
+    updateGutter();
+  }
+});
+
+function clearEditor(){
+  document.getElementById('codeTA').value='';
+  updateGutter();
+  document.getElementById('errPanel').classList.remove('show');
+  document.getElementById('errPanel').innerHTML='';
+  setStatus('idle','IDLE');
+}
+
+// ════════════════════════════════════
+//  JOYSTICK RC CONTROLLER — Real RC Style
+// ════════════════════════════════════
+const JS = {
+  left:  { x:0, y:0, active:false },
+  right: { x:0, y:0, active:false },
+  maxR: 28
+};
+
+function getJoystickCenter(id) {
+  const el = document.getElementById(id);
+  const r = el.getBoundingClientRect();
+  return { cx: r.left + r.width/2, cy: r.top + r.height/2 };
+}
+
+function updateJoystickFromEvent(side, cx, cy) {
+  const elId = side==='left' ? 'jsLeft' : 'jsRight';
+  const c = getJoystickCenter(elId);
+  const maxR = JS.maxR;
+  let dx = cx - c.cx, dy = cy - c.cy;
+  const dist = Math.sqrt(dx*dx+dy*dy);
+  if(dist > maxR){ dx=dx/dist*maxR; dy=dy/dist*maxR; }
+  JS[side].x = dx; JS[side].y = dy;
+  setKnob(side==='left'?'knobL':'knobR', dx, dy);
+}
+
+function setKnob(id, dx, dy) {
+  const el = document.getElementById(id);
+  el.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+  const glow = Math.sqrt(dx*dx+dy*dy)/JS.maxR;
+  el.style.boxShadow = `0 0 ${8+glow*14}px rgba(0,229,255,${0.4+glow*0.5})`;
+}
+
+function applyJoystick() {
+  if(!S.armed || S.running || S.crashed) return;
+  const maxR = JS.maxR;
+  const thrInput = -JS.left.y / maxR;
+  if(Math.abs(thrInput) > 0.04) S.thr = clamp(S.thr + thrInput * 1.8);
+  const yawInput = JS.left.x / maxR;
+  if(Math.abs(yawInput) > 0.04){ S.heading=(S.heading+yawInput*3+360)%360; S.yaw+=yawInput*3; }
+  S.pitch = clamp(-JS.right.y/maxR*40,-40,40);
+  S.roll  = clamp( JS.right.x/maxR*40,-40,40);
+  if(!JS.right.active){
+    S.pitch*=0.84; S.roll*=0.84;
+    if(Math.abs(S.pitch)<0.4) S.pitch=0;
+    if(Math.abs(S.roll)<0.4)  S.roll=0;
+  }
+}
+
+let activeDrag=null;
+
+function startDrag(side,e) {
+  e.preventDefault();
+  activeDrag=side; JS[side].active=true;
+  updateJoystickFromEvent(side,e.clientX,e.clientY);
+  document.addEventListener('mousemove',onDrag);
+  document.addEventListener('mouseup',endDrag);
+}
+
+function startDragT(side,e) {
+  e.preventDefault();
+  activeDrag=side; JS[side].active=true;
+  updateJoystickFromEvent(side,e.touches[0].clientX,e.touches[0].clientY);
+  document.addEventListener('touchmove',onDragT,{passive:false});
+  document.addEventListener('touchend',endDrag);
+}
+
+function onDrag(e) {
+  if(activeDrag) updateJoystickFromEvent(activeDrag,e.clientX,e.clientY);
+}
+function onDragT(e) {
+  e.preventDefault();
+  if(activeDrag) updateJoystickFromEvent(activeDrag,e.touches[0].clientX,e.touches[0].clientY);
+}
+
+function endDrag() {
+  if(activeDrag) {
+    JS[activeDrag].active=false;
+    // Right stick springs fully back
+    if(activeDrag==='right'){ JS.right.x=0;JS.right.y=0;setKnob('knobR',0,0); }
+    // Left stick: X (yaw) springs back, Y (throttle) stays
+    if(activeDrag==='left'){ JS.left.x=0;setKnob('knobL',0,JS.left.y); }
+    activeDrag=null;
+  }
+  document.removeEventListener('mousemove',onDrag);
+  document.removeEventListener('mouseup',endDrag);
+  document.removeEventListener('touchmove',onDragT);
+  document.removeEventListener('touchend',endDrag);
+}
+
+// ════════════════════════════════════
+//  KEYBOARD
+// ════════════════════════════════════
+document.addEventListener('keydown',e=>{
+  if(document.activeElement===document.getElementById('codeTA')) return;
+  keys[e.key]=true;
+  if(e.key==='r'||e.key==='R') resetDrone();
+});
+document.addEventListener('keyup',e=>{keys[e.key]=false;});
+
+// ════════════════════════════════════
+//  LOG
+// ════════════════════════════════════
+function addLog(type,msg){
+  const el=document.getElementById('logInner');
+  const s=S.flightStart?Math.floor((Date.now()-S.flightStart)/1000):0;
+  const t=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+  const row=document.createElement('div');
+  row.className='log-row';
+  row.innerHTML=`<span class="lt">${t}</span><span class="lc-${type}">${msg}</span>`;
+  el.appendChild(row);
+  el.scrollTop=el.scrollHeight;
+}
+
+// ════════════════════════════════════
+//  BOOT
+// ════════════════════════════════════
+updateGutter();
+requestAnimationFrame(loop);
+setTimeout(()=>{
+  addLog('info','Simulator ready');
+  addLog('info','1. Load an example code');
+  addLog('info','2. ARM the drone');
+  addLog('info','3. Press COMPILE & RUN');
+},200);
+</script>
+</body>
+</html>
